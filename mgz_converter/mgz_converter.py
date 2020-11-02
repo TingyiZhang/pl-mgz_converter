@@ -168,48 +168,64 @@ class Mgz_converter(ChrisApp):
     Prepare PNG files for training by converting them
     into .npy files
     """
-    def preprocess(self,options):
+    def preprocess(self, options):
         create_train_data(options)
         
     # convert label ranges from 0-255
-    def convert_key(self,dictionary,data):
-        for i in range(0,255):
-            for j in range(0,255):
-                data[i][j]=list(dictionary.keys())[list(dictionary.values()).index(data[i][j])]
+    def convert_key(self, dictionary, data):
+        for i in range(0, 255):
+            for j in range(0, 255):
+                data[i][j] = list(dictionary.keys())[list(dictionary.values()).index(data[i][j])]
         return data
 
-
-    def convert_nifti_to_png(self,new_image,output_name):
+    def convert_nifti_to_png(self, new_image, output_name):
         # converting nifti to .png
-        ask_rotate_num=90
-        outputfile=output_name
-        inputfile='input'
-        ask_rotate='n'
-        nx, ny, nz = new_image.shape
+        print('Reading NIfTI file...')
+
+        # get all the labels present
+        labels = np.unique(new_image.astype(np.uint16))
+
+        # now create a dictionary from the labels
+        dictionary = {}
+        dcount = 0
+        for label in labels:
+            dictionary[dcount] = label
+            dcount = dcount+1
+        print(str(len(dictionary)) + ' labels.')
+
+        # Input data is the ground truth
+        if "mask" in output_name:
+            print("Reading masks...")
+            for kv in dictionary:
+                print("Processing label: " + str(kv))
+                copy_image = np.copy(new_image)
+
+                # Marking one label
+                copy_image[copy_image != dictionary[kv]] = 0
+                copy_image[copy_image == dictionary[kv]] = kv
+
+                self.write_to_file(copy_image, output_name + '/label-' + str(kv))
+                print("Processing label: " + str(kv) + ' Done.')
+                print('-' * 30)
+
+            print("Processing the whole mask...")
+            for kv in dictionary:
+                new_image[new_image == dictionary[kv]] = kv
+            self.write_to_file(new_image, output_name + '/whole')
+            return
+
+        # Input data is the train data
+        self.write_to_file(new_image, output_name)
+
+    def write_to_file(self, new_image, output_name):
+        outputfile = output_name
+        inputfile = 'input'
+        ask_rotate_num = 90
+        ask_rotate = 'n'
+        total_slices = new_image.shape[2]
 
         if not os.path.exists(outputfile):
             os.makedirs(outputfile)
-            print("Created ouput directory: " + outputfile)
-
-        print('Reading NIfTI file...')
-        
-        # get all the labels present
-        labels =[]
-        labels = np.unique(new_image.astype(np.uint16))
-        
-        # now create a dictionary from the labels
-        dictionary={}
-        dcount =0
-        for label in labels:
-            dictionary[dcount]=label
-            dcount=dcount+1
-            
-        
-        if "mask" in output_name:
-            for kv in dictionary:
-                new_image[new_image==dictionary[kv]]= kv
-            
-        total_slices = new_image.shape[2]
 
         slice_counter = 0
         # iterate through slices
@@ -227,53 +243,46 @@ class Mgz_converter(ChrisApp):
                             data = np.rot90(np.rot90(np.rot90(new_image[:, :, current_slice])))
                 elif ask_rotate.lower() == 'n':
                     data = new_image[:, :, current_slice]
-                 
-                
-                #if "mask" in output_name:
-                    #data=self.convert_key(dictionary,data)
-                    
+
                 # prevents lossy conversion
                 data = data.astype(np.uint8)
 
-                #alternate slices and save as png
+                # alternate slices and save as png
                 if (slice_counter % 1) == 0:
-                    print('Saving image...')
-                    image_name = inputfile[:-4] + "_z" + "{:0>3}".format(str(current_slice+1))+ ".png"
+                    image_name = inputfile[:-4] + "_z" + "{:0>3}".format(str(current_slice + 1)) + ".png"
                     imageio.imwrite(image_name, data)
-                    print('Saved.')
 
-                    #move images to folder
-                    print('Moving image...')
+                    # move images to folder
                     src = image_name
                     shutil.move(src, outputfile)
                     slice_counter += 1
-                    print('Moved.')
+        print('Images saved at: ' + output_name)
 
-        print('Finished converting images')
-
-    def convert_to_jpeg(self,options):
-        path=options.inputdir
-        dirs=[d for d in os.listdir(path) if os.path.isdir(os.path.join(path,d))]
+    def convert_to_jpeg(self, options):
+        path = options.inputdir
+        dirs = [d for d in os.listdir(path) if os.path.isdir(os.path.join(path, d))]
         for i in tqdm(dirs):
             # converting mgz to numpy
             img = nib.load(options.inputdir + "/" + i + "/brain.mgz")
             img1 = nib.load(options.inputdir + "/" + i + "/aparc.a2009s+aseg.mgz")
-            X_numpy=img.get_fdata()
-            y_numpy=img1.get_fdata()
-            
-            # converting nifti to png
-            self.convert_nifti_to_png(X_numpy,options.outputdir + "/train/" + i)
-            self.convert_nifti_to_png(y_numpy,options.outputdir + "/masks/" + i)
+            X_numpy = img.get_fdata()
+            y_numpy = img1.get_fdata()
 
-    #### OBSOLETE CODE : Might require in future ####
-    def convert_to_npy(self,options):
+            print('Processing subject: ' + i)
+            # converting nifti to png
+            self.convert_nifti_to_png(X_numpy, options.outputdir + "/train/" + i)
+            self.convert_nifti_to_png(y_numpy, options.outputdir + "/masks/" + i)
+            print('Processing subject: ' + i + ' Done.')
+
+    # OBSOLETE CODE : Might require in future ####
+    def convert_to_npy(self, options):
         path=options.inputdir
         dirs=[d for d in os.listdir(path) if os.path.isdir(os.path.join(path,d))]
         for i in tqdm(dirs):
             img = nib.load(options.inputdir + "/" + i + "/brain.mgz")
             img1 = nib.load(options.inputdir + "/" + i + "/aparc.a2009s+aseg.mgz")
             file = open(options.outputdir +"/train/" + i + ".npy", "wb")
-            file1 = open(options.outputdir + "/masks/" +i + ".npy","wb")
+            file1 = open(options.outputdir + "/masks/" +i + ".npy", "wb")
             np.save(file1, img1.get_data())
             np.save(file, img.get_data())
 
