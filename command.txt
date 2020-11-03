@@ -1,0 +1,3 @@
+docker run --rm -v $(pwd)/in:/incoming -v $(pwd)/test:/outgoing                                   \
+        local/pl-mgz_converter mgz_converter.py                                    \
+        /incoming /outgoing

@@ -14,7 +14,7 @@ labels = os.listdir(path)
 for n in range(90, 100):
     img = np.zeros((256, 256), dtype=np.uint8)
     for label in labels:
-        if not os.path.isdir(path + label):
+        if not os.path.isdir(path + label) or label == 'whole':
             continue
         mask = imread(path + label + '/i_z' + "{:0>3}".format(str(n + 1)) + '.png')
         for i in range(256):

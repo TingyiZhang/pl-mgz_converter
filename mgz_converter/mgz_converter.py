@@ -156,7 +156,7 @@ class Mgz_converter(ChrisApp):
             os.mkdir(options.outputdir + "/masks")
 
         except OSError:
-            print ("Output folders already exist")
+            print("Output folders already exist")
         print(os.getcwd())
 
         # Slice the .mgz file to 256 .png files
